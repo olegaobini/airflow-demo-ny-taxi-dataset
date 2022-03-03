@@ -5,11 +5,9 @@ FROM apache/airflow:2.2.3
 ENV AIRFLOW_HOME=/opt/airflow
 
 USER root
-RUN apt-get update -qq \
-    && apt-get install vim -qqq \
-    && apt-get install wget -y \
-    && rm -rf /var/lib/apt/lists/*
-# git gcc g++ -qqq
+RUN apt-get update -qq \ 
+	&& apt-get install build-essential wget libsasl2-dev python-dev libldap2-dev libssl-dev libmysqlclient-dev unixodbc unixodbc-dev -y \ 
+	&& rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
