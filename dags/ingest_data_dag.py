@@ -12,7 +12,7 @@ from scripts.ingest_local_script import _ingest_data
 
 
 default_args = {
-    'start_date': datetime(2009, 1, 1),
+    'start_date': datetime(2021, 1, 1),
 }
 
 AIRFLOW_HOME = os.environ.get("AIRFLOW_HOME", "/opt/airflow/")
