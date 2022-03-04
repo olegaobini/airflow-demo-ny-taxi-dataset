@@ -8,7 +8,7 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime
 import os
 
-from ingest_script import _ingest_data
+from scripts.ingest_local_script import _ingest_data
 
 
 default_args = {
