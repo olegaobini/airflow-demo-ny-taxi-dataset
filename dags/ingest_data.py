@@ -9,8 +9,9 @@ from datetime import datetime
 from time import perf_counter
 import pandas as pd
 
+
 default_args = {
-    'start_date': datetime(2021, 0, 1)
+    'start_date': datetime(2021, 1, 1),
 }
 
 
@@ -26,8 +27,10 @@ def _ingest_data(table_name, csv_name, user, password, host, port, db):
     df_iter = pd.read_csv(csv_name, iterator=True, chunksize=100000)
     df = next(df_iter)
 
-    # create schema and export into database
+    # DATE column transformation
     transform_datetime(df)
+
+    # create schema and export into database
     df.head(n=0).to_sql(name=table_name, con=engine, if_exists="replace")
     df.to_sql(name=table_name, con=engine, if_exists="append")
 
@@ -37,7 +40,7 @@ def _ingest_data(table_name, csv_name, user, password, host, port, db):
 
             df = next(df_iter)
 
-            # same transformation
+            # column transformation
             transform_datetime(df)
 
             df.to_sql(name=table_name, con=engine, if_exists="append")
@@ -52,24 +55,43 @@ def _ingest_data(table_name, csv_name, user, password, host, port, db):
             break
 
 
+def _test():
+    return '\nhi\n'
+
+
 with DAG('ingest_data',
-         schedule_interval='@daily',
          default_args=default_args,
-         catchup=False) as dag:
+         schedule_interval='0 0 2 * *',
+         catchup=True,
+         user_defined_macros={
+             'test': _test,
+         }
+         ) as dag:
+
+    _DATE = '{{ds}}'
+    # _DATE = '{{ds.strptime(ds,"")[:ds.rfind("-")]}}'
+    # _DATE = '{{ds[:ds.rfind("-")]}}'
+    # ENDPOINT = f'yellow_tripdata_{_DATE}.csv'
+    # NY_TAXI_API = BaseHook.get_connection("ny_taxi_api").host
 
     # look at the connections in airflow
-    connection = BaseHook.get_connection("ny_taxi_api")
     # print(connection.host)
+
+    test = BashOperator(
+        task_id='test',
+        bash_command='echo {{test}}'
+        # bash_command=f'echo {NY_TAXI_API}{ENDPOINT}'
+    )
 
     # is_dataset_available = HttpSensor(
     #     default_args=default_args,
     #     task_id='is_dataset_available',
     #     http_conn_id='ny_taxi_api',
-    #     endpoint='yellow_tripdata_2021-01.csv')
+    #     endpoint=ENDPOINT
 
     # download_dataset = BashOperator(
     #     task_id='download_dataset',
-    #     bash_command='wget https://s3.amazonaws.com/nyc-tlc/trip+data/yellow_tripdata_2021-01.csv -O /tmp/yellow_tripdata.csv'
+    #     bash_command=f'wget {NY_TAXI_API}{ENDPOINT} -O /tmp/yellow_tripdata.csv'
     # )
 
     # ingest_data = PythonOperator(
