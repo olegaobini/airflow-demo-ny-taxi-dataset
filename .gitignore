@@ -228,3 +228,6 @@ licenses/LICENSES-ui.txt
 
 # Visual Studio Code 
 .vscode/
+
+# postgres data
+ny_taxi_postgres_data/*
