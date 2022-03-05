@@ -16,7 +16,6 @@ default_args = {
 }
 
 AIRFLOW_HOME = os.environ.get("AIRFLOW_HOME", "/opt/airflow/")
-
 PG_HOST = os.getenv('PG_HOST')
 PG_USER = os.getenv('PG_USER')
 PG_PASSWORD = os.getenv('PG_PASSWORD')
@@ -35,6 +34,7 @@ with DAG('ingest_data',
          default_args=default_args,
          schedule_interval='0 0 2 * *',
          catchup=True,
+         tags=['yellow taxi tripdata'],
          ) as dag:
 
     wget_task = BashOperator(
