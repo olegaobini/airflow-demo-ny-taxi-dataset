@@ -16,7 +16,7 @@ BUCKET = os.environ.get("GCP_GCS_BUCKET")
 'https://s3.amazonaws.com/nyc-tlc/misc/taxi+_zone_lookup.csv'
 URL_TEMPLATE = 'https://s3.amazonaws.com/nyc-tlc/misc/taxi+_zone_lookup.csv'
 
-OUTPUT_FILE_TEMPLATE = f'{AIRFLOW_HOME}/output.csv'
+OUTPUT_FILE_TEMPLATE = f'{AIRFLOW_HOME}/zones.csv'
 
 TABLE_NAME_TEMPLATE = 'zones'
 
@@ -34,7 +34,7 @@ default_args = {
 # NOTE: DAG declaration - using a Context Manager (an implicit way)
 with DAG(
     dag_id="data_ingest_gcs_zones",
-    schedule_interval="@daily",
+    schedule_interval="@once",
     default_args=default_args,
     catchup=False,
     max_active_runs=1,
@@ -42,7 +42,7 @@ with DAG(
 ) as dag:
 
     download_dataset = BashOperator(
-        task_id="download_datasets",
+        task_id="download_dataset",
         bash_command=f"curl -sSLf {URL_TEMPLATE} > {OUTPUT_FILE_TEMPLATE}"
     )
 
@@ -59,14 +59,14 @@ with DAG(
         python_callable=upload_to_gcs,
         op_kwargs={
             "bucket": BUCKET,
-            "object_name": f"raw/{PARQUET_FILE}",
-            "local_file": f"{AIRFLOW_HOME}/{PARQUET_FILE}",
+            "object_name": f"raw/zones.parquet",
+            "local_file": f"{PARQUET_FILE}",
         },
     )
 
     remove_local_data = BashOperator(
         task_id="remove_local_data",
-        bash_command=f"rm -rf {AIRFLOW_HOME}/output.csv"
+        bash_command=f"rm -rf {AIRFLOW_HOME}/zones.*"
     )
 
     bigquery_external_table = BigQueryCreateExternalTableOperator(
@@ -79,9 +79,9 @@ with DAG(
             },
             "externalDataConfiguration": {
                 "sourceFormat": "PARQUET",
-                "sourceUris": [f"gs://{BUCKET}/raw/{PARQUET_FILE}"],
+                "sourceUris": [f"gs://{BUCKET}/raw/zones.parquet"],
             },
         },
     )
 
-    download_dataset >> format_to_parquet >> local_to_gcs >> bigquery_external_table
+    download_dataset >> format_to_parquet >> local_to_gcs >> remove_local_data >> bigquery_external_table

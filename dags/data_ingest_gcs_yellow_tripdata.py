@@ -12,15 +12,15 @@ AIRFLOW_HOME = os.environ.get("AIRFLOW_HOME", "/opt/airflow/")
 PROJECT_ID = os.environ.get("GCP_PROJECT_ID")
 BUCKET = os.environ.get("GCP_GCS_BUCKET")
 
+dataset_file = "yellow_tripdata_{{ execution_date.strftime(\'%Y-%m\') }}"
+TABLE_NAME_TEMPLATE = 'yellow_taxi_{{ execution_date.strftime(\'%Y_%m\') }}'
+
 URL_PREFIX = 'https://s3.amazonaws.com/nyc-tlc/trip+data'
 
-URL_TEMPLATE = URL_PREFIX + \
-    '/yellow_tripdata_{{ execution_date.strftime(\'%Y-%m\') }}.csv'
+URL_TEMPLATE = f'{URL_PREFIX}/{dataset_file}.csv'
 
-OUTPUT_FILE_TEMPLATE = AIRFLOW_HOME + \
-    '/output_{{ execution_date.strftime(\'%Y-%m\') }}.csv'
+OUTPUT_FILE_TEMPLATE = f'{AIRFLOW_HOME}/{dataset_file}.csv'
 
-TABLE_NAME_TEMPLATE = 'yellow_taxi_{{ execution_date.strftime(\'%Y_%m\') }}'
 
 PARQUET_FILE = OUTPUT_FILE_TEMPLATE.replace('.csv', '.parquet')
 BIGQUERY_DATASET = os.environ.get("BIGQUERY_DATASET", 'trips_data_all')
@@ -28,7 +28,7 @@ BIGQUERY_DATASET = os.environ.get("BIGQUERY_DATASET", 'trips_data_all')
 
 default_args = {
     "owner": "airflow",
-    "start_date": days_ago(1),
+    "start_date": '2019-01-01',
     "depends_on_past": False,
     "retries": 1,
 }
@@ -36,15 +36,15 @@ default_args = {
 # NOTE: DAG declaration - using a Context Manager (an implicit way)
 with DAG(
     dag_id="data_ingest_gcs_yellow_tripdata",
-    schedule_interval="@daily",
+    schedule_interval="@monthly",
     default_args=default_args,
-    catchup=False,
-    max_active_runs=1,
+    catchup=True,
+    max_active_runs=3,
     tags=['yellow taxi tripdata'],
 ) as dag:
 
     download_dataset = BashOperator(
-        task_id="download_datasets",
+        task_id="download_dataset",
         bash_command=f"curl -sSLf {URL_TEMPLATE} > {OUTPUT_FILE_TEMPLATE}"
     )
 
@@ -61,14 +61,14 @@ with DAG(
         python_callable=upload_to_gcs,
         op_kwargs={
             "bucket": BUCKET,
-            "object_name": f"raw/{PARQUET_FILE}",
-            "local_file": f"{AIRFLOW_HOME}/{PARQUET_FILE}",
+            "object_name": f"raw/{dataset_file}.parquet",
+            "local_file": f"{PARQUET_FILE}",
         },
     )
 
     remove_local_data = BashOperator(
         task_id="remove_local_data",
-        bash_command=f"rm -rf {AIRFLOW_HOME}/output_*"
+        bash_command=f"rm -rf {AIRFLOW_HOME}/{dataset_file}.*"
     )
 
     bigquery_external_table = BigQueryCreateExternalTableOperator(
@@ -81,9 +81,9 @@ with DAG(
             },
             "externalDataConfiguration": {
                 "sourceFormat": "PARQUET",
-                "sourceUris": [f"gs://{BUCKET}/raw/{PARQUET_FILE}"],
+                "sourceUris": [f"gs://{BUCKET}/raw/{dataset_file}.parquet"],
             },
         },
     )
 
-    download_dataset >> format_to_parquet >> local_to_gcs >> bigquery_external_table
+    download_dataset >> format_to_parquet >> local_to_gcs >> remove_local_data >> bigquery_external_table
